@@ -140,6 +140,12 @@ if uploaded_file is not None:
     if question:
         api_key = os.getenv("GEMINI_API_KEY")
 
+if not api_key:
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        api_key = None
+
         if not api_key:
             st.error(
                 "GEMINI_API_KEY was not found. "
@@ -196,12 +202,40 @@ QUESTION:
 ANSWER:
 """
 
-                    response = client.models.generate_content(
-                        model="gemini-3.5-flash",
-                        contents=prompt,
-                    )
+                    import time
 
-                    answer = response.text
+models = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
+]
+
+response = None
+
+for model in models:
+    for attempt in range(2):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt
+            )
+            break
+        except Exception as e:
+            error = str(e)
+
+            if "503" in error or "UNAVAILABLE" in error:
+                time.sleep(2 ** (attempt + 1))
+            else:
+                raise
+
+    if response is not None:
+        break
+
+if response is None:
+    st.error("Gemini is temporarily busy. Please try again in a minute.")
+    st.stop()
+
+answer = response.text
 
                     if answer:
                         st.markdown(answer)
